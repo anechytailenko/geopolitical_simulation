@@ -1,0 +1,25 @@
+# secrets / credentials — never commit
+.env
+.env.*
+!.env.example
+
+# large research data (regenerable from the documented sources; trimmed to 2010+)
+/datasets_csv/
+
+# build artifacts & scratch
+*.tmp
+/tmp/
+geopolitic-api
+
+# ML stage (services/ml) — regenerable outputs, never commit
+/services/ml/dataset_parquet/
+/services/ml/artifacts/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.pt
+*.pkl
+
+# Neo4j dumps
+*.dump
+*.dump.gz

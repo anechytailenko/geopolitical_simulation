@@ -1,0 +1,7 @@
+{
+  "permanent": ["USA", "RUS", "GBR", "FRA", "CHN"],
+  "elected": {
+    "2024": ["JPN", "KOR"],
+    "2023": ["JPN", "BRA"]
+  }
+}

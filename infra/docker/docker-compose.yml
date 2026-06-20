@@ -1,0 +1,45 @@
+# Two independent Neo4j Community containers — one per logical database, so the
+# whole stack runs license-free (multi-database in a single instance needs
+# Enterprise). Defaults match internal/config: raw=7687, aggregated=7688.
+services:
+  neo4j-raw:
+    image: neo4j:5.26-community
+    container_name: geopolitic-neo4j-raw
+    ports:
+      - "7474:7474" # HTTP browser
+      - "7687:7687" # Bolt
+    environment:
+      NEO4J_AUTH: neo4j/geopolitic
+      NEO4J_server_memory_pagecache_size: 1G
+      NEO4J_server_memory_heap_max__size: 1G
+    volumes:
+      - neo4j_raw_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p geopolitic 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  neo4j-aggregated:
+    image: neo4j:5.26-community
+    container_name: geopolitic-neo4j-aggregated
+    ports:
+      - "7475:7474" # HTTP browser
+      - "7688:7687" # Bolt
+    environment:
+      NEO4J_AUTH: neo4j/geopolitic
+      NEO4J_server_memory_pagecache_size: 512M
+      NEO4J_server_memory_heap_max__size: 1G
+    volumes:
+      - neo4j_aggregated_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p geopolitic 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  neo4j_raw_data:
+  neo4j_aggregated_data:
