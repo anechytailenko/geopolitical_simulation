@@ -3,9 +3,9 @@ A geopolitical simulation powered by a Spatio-Temporal Graph Neural Network (GNN
 ---
 
 # Demo of Agent
-![](demos/demo.png)
+![](demos/record_demo.gif)
 
-![](demos/demo_gif.gif)
+![](demos/demo.png)
 
 # Databases view
 
