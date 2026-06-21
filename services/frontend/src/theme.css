@@ -1,0 +1,380 @@
+/* Electric-purple chrome (plans/05 §6). The five relationship-class colors are a SEPARATE
+   semantic legend defined in src/lib/classColors.ts — only the chrome is purple. */
+:root {
+  --bg: #150d22;
+  --surface: #211633;
+  --surface-2: #2a1c3f;
+  --border: #3a2a55;
+  --accent: #a855f7; /* buttons, active chip, focus node/edge, links */
+  --focus: #c084fc; /* the highlighted prediction edge */
+  --text: #f3eaff;
+  --text-muted: #b3a0d0;
+  --pos: #34d399; /* IG: pushes toward predicted class */
+  --neg: #fb7185; /* IG: pushes away */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---- header ---- */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.header .brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.header .logo {
+  font-weight: 700;
+}
+.header .logo::before {
+  content: "◑ ";
+  color: var(--accent);
+}
+.header .subtitle {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.header .meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.header .meta button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+/* ---- two-panel body ---- */
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.panel-left {
+  flex: 0 0 58%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+.panel-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.panel-title .explainer-tag {
+  color: var(--accent);
+}
+
+/* ---- subgraph ---- */
+.subgraph-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.subgraph-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.node-label {
+  fill: var(--text);
+  font-size: 11px;
+  pointer-events: none;
+}
+.edge-label {
+  fill: var(--focus);
+  font-size: 10px;
+  pointer-events: none;
+}
+.empty-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+/* legend */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.legend .item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* IG popup */
+.ig-popup {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  width: 250px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.ig-popup .ig-head {
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ig-popup .ig-head button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+.ig-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin: 3px 0;
+  font-size: 12px;
+}
+.ig-bar {
+  height: 6px;
+  border-radius: 3px;
+}
+
+/* ---- chat ---- */
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.bubble-user {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 12px 12px 2px 12px;
+  padding: 8px 12px;
+}
+.assistant {
+  align-self: flex-start;
+  max-width: 95%;
+  width: 100%;
+}
+.tool-step {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin: 2px 0;
+}
+.tool-step .pending {
+  opacity: 0.6;
+}
+.answer-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 8px;
+}
+.answer-card .answer-text {
+  margin-bottom: 8px;
+}
+.answer-card .conf-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 8px;
+}
+.cf-banner {
+  background: var(--surface-2);
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+/* probability bars */
+.prob-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.prob-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 40px;
+  gap: 8px;
+  align-items: center;
+  margin: 3px 0;
+  font-size: 12px;
+}
+.prob-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+  height: 10px;
+}
+.prob-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+.cf-cols {
+  display: flex;
+  gap: 14px;
+}
+.cf-cols > div {
+  flex: 1;
+}
+
+/* chips */
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  scroll-snap-type: x proximity;
+}
+.chips::-webkit-scrollbar {
+  height: 6px;
+}
+.chips::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 3px;
+}
+.chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  white-space: nowrap;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+}
+.chip-scroll-btn {
+  flex: 0 0 auto;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 16px;
+  width: 28px;
+  cursor: pointer;
+}
+
+/* input */
+.input-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.input-row input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.input-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.input-row button {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.input-row button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error-bubble {
+  align-self: center;
+  background: rgba(251, 113, 133, 0.15);
+  border: 1px solid var(--neg);
+  color: var(--neg);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+}

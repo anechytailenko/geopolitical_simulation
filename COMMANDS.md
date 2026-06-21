@@ -398,3 +398,229 @@ Then re-run step 6.
 docker compose -f infra/docker/docker-compose.yml down       # keep data volumes
 docker compose -f infra/docker/docker-compose.yml down -v    # delete all data
 ```
+
+---
+
+## 11. ReAct agent & MCP tools (`services/agent`, see plans/04-react-agent.md)
+
+The agent answers natural-language geopolitical questions by calling **task-shaped MCP tools**
+that run the trained GNN (`ml.infer.Predictor`) in-process. It is **read-only and database-free**:
+it loads the model artifacts from `artifacts/` and the dataset from
+`services/ml/dataset_parquet/` (the same export the model trained on) and resolves places with
+`pycountry` + the parquet `MEMBER_OF` edges — it never connects to Neo4j, so it **cannot alter or
+delete ingested data and never re-runs ingestion**. No GPU is needed.
+
+Prerequisites: the trained bundle already exists at `artifacts/` (`best.pt`, `preprocess.pkl`,
+`calibrator.pkl`, `metrics.json`) and the parquet export at `services/ml/dataset_parquet/`.
+
+### 11a. One-time setup (isolated venv that reuses the system torch/PyG)
+
+```bash
+python3 -m venv --system-site-packages services/agent/.venv
+PV=services/agent/.venv/bin/python
+# (add --trusted-host pypi.org --trusted-host files.pythonhosted.org if your Python has the
+#  macOS SSL-cert issue; omit otherwise)
+$PV -m pip install -e services/ml --no-deps
+$PV -m pip install -e services/agent          # langgraph, langchain-core, mcp,
+                                              #   langchain-mcp-adapters, langchain-ollama,
+                                              #   fastapi, sse-starlette, pycountry, pytest
+```
+
+**Output:** `Successfully installed … langgraph-1.x mcp-1.x pycountry-…`. The venv inherits
+`torch` / `torch-geometric` / `scikit-learn` from the system, so only the agent stack downloads.
+
+### 11b. Environment (optional — paths auto-discover)
+
+**You do not need to export anything.** The agent **auto-discovers** the model bundle: if
+`GEO_DATA_DIR` / `GEO_ARTIFACTS_DIR` are unset (or point somewhere without the files), it falls
+back to the bundle shipped in the repo (`services/ml/dataset_parquet/` and `artifacts/`). So
+`python -m agent` / `python -m agent.mcp_server` work from **any** directory — this is what avoids
+the `FileNotFoundError: dataset_parquet/node_snapshots.parquet` you get when launching from the
+repo root without the old exports.
+
+To customize (LLM, explainer cost, or an alternate bundle), put the vars in a **`.env`** file the
+agent loads at startup (repo-root `.env`, then `services/agent/.env`; an existing shell env always
+wins). Copy the template:
+
+```bash
+cp services/agent/.env.example services/agent/.env     # then edit if desired
+```
+
+Available knobs (all optional; defaults shown):
+
+```
+LLM_PROVIDER=ollama   LLM_MODEL=qwen2.5:3b-instruct     # or LLM_PROVIDER=anthropic (+ ANTHROPIC_API_KEY)
+GNN_EXPLAINER_EPOCHS=64   IG_STEPS=24                   # explainer cost (lower = faster, coarser masks)
+# GEO_ARTIFACTS_DIR / GEO_DATA_DIR  — only to OVERRIDE the auto-discovered repo bundle (ABSOLUTE paths)
+```
+
+> Do **not** use `$PWD` inside a `.env` file — it is not expanded there. Thanks to
+> auto-discovery you normally don't need the path vars at all.
+
+### 11c. Run the tests (no LLM, no Neo4j, read-only)
+
+```bash
+cd services/agent
+.venv/bin/python -m pytest -q
+```
+
+**Output:**
+
+```
+..................................                                       [100%]
+34 passed in ~45–70s
+```
+
+The suite (34 tests) drives the **real trained model** and a **deterministic scripted LLM** (no
+Ollama, no network) and an **in-memory MCP client/server session** (no subprocess). It covers:
+place resolution incl. the temporal NATO membership (FIN/SWE present at T=197, absent at T=100);
+server-side arg validation (bad ISO-3 / class / time_step); `predict_pair` summing to 1.0,
+determinism, and a quiet no-edge dyad; group/counterpart ranking; the `compare_pair` 5→3 buckets;
+the explainer (subgraph importances ∈ [0,1], IG only for the focus pair `u`/`v`, completeness
+gap < 0.05); the single-step counterfactual (baseline reproduces `predict_pair`, edit applied at
+input level, no cache mutation); the ReAct graph + deterministic viz for the 4 question types;
+and the SSE server emitting `token`/`tool_call`/`tool_result`/`final`. The whole run loads the
+model once (~10 s) and touches no database.
+
+> Note on the shipped checkpoint: it is overconfident and dominated by identity + the query
+> pair's own features, so a counterfactual neighbor-edit moves the output only marginally (max
+> Δ ≈ 1e-4). The tests assert the **mechanism** (baseline correctness, input edit, no mutation,
+> valid one-step distribution), not a large output swing the model does not produce.
+
+### 11d. Run the MCP server (stdio — for an MCP client such as Claude Desktop)
+
+```bash
+services/agent/.venv/bin/python -m agent.mcp_server
+```
+
+**Output:** loads the model once (the §11 boot self-check asserts the class order matches Go/
+Python canon and a probe `predict("USA","CHN",197)` sums to 1.0; it **fails fast** on a
+mislocated/misaligned artifact), then serves these 8 tools over stdio:
+`get_latest_time_step, resolve_place, predict_pair, best_pair_in_group, most_likely_counterpart,
+compare_pair, explain_pair, predict_counterfactual`. It runs until the client disconnects.
+
+### 11e. Run the chat agent (HTTP + Server-Sent Events)
+
+The default LLM is local Ollama. Run it **either on the host** (uses Metal on macOS — the faster
+path) **or in Docker** (reproducible, matches the Neo4j stack; CPU-only on macOS, GPU on
+Linux+NVIDIA — see plans/04 §10.1). The agent reaches either at `OLLAMA_BASE_URL`
+(default `http://localhost:11434`), so the two are interchangeable with no code change.
+
+```bash
+# Option A — host Ollama (recommended on Apple Silicon):
+ollama serve &                           # start the local Ollama server (or launch the Ollama.app)
+ollama pull qwen2.5:3b-instruct          # ~3 GB (plans/04 §10); needs ~4–5 GB free w/ the model
+
+# Option B — dockerized Ollama (opt-in compose profile; NOT started by a plain `up`):
+docker compose -f infra/docker/docker-compose.yml --profile llm up -d ollama
+docker exec geopolitic-ollama ollama pull qwen2.5:3b-instruct   # one-time, into the volume
+
+# then start the agent (same command for either option; no env exports needed — §11b):
+services/agent/.venv/bin/python -m agent  # uvicorn on http://127.0.0.1:8100
+```
+
+> If `ollama pull` prints `could not connect to ollama server, run 'ollama serve'`, the local
+> Ollama server isn't running — run `ollama serve` (or open the Ollama app) first, then pull. The
+> agent itself still **boots** without Ollama (the LLM is built lazily); only a chat request fails,
+> and it returns a clean error event rather than crashing.
+
+**Output (docker option):** `geopolitic-ollama … Started`; the model volume `ollama_models`
+caches the pulled weights so the pull is one-time. Stop it with
+`docker compose -f infra/docker/docker-compose.yml --profile llm down`.
+
+**Output:** `INFO: Uvicorn running on http://127.0.0.1:8100`. Liveness:
+`curl -s localhost:8100/health` → `{"status":"ok"}`. Stream a question:
+
+```bash
+curl -N -s -X POST localhost:8100/agent/chat \
+  -H 'content-type: application/json' \
+  -d '{"message":"What is most likely between the USA and China next month?"}'
+```
+
+**Output:** an SSE stream — `event: tool_call` (the chosen tool + args) → `event: tool_result`
+(a one-line summary) → `event: token` (the answer text) → `event: final` (the viz payload:
+`focus_pairs`, the GNNExplainer `subgraph`, and Integrated-Gradients `feature_attributions` for
+the two focus countries; plans/04 §6). The deterministic viz step always explains the answer's
+focus pair, so the panel can never disagree with the answer.
+
+No GPU and no Neo4j are required. To run without Ollama, set `LLM_PROVIDER=anthropic` (with
+`langchain-anthropic` installed and `ANTHROPIC_API_KEY` set) — one env change, same tools.
+
+---
+
+## 12. Web frontend (`services/frontend`, see plans/05-frontend.md)
+
+A Vite + React + TypeScript single-page app — the chat-driven demo. It talks to **one** origin:
+the agent's SSE endpoint (`POST /agent/chat` on `:8100`), proxied by Vite in dev. It never
+reaches Neo4j, the Go API, or BigQuery, and performs **no database access** — it only renders the
+agent's payload. Requires Node 18+ (Node 22 here).
+
+### 12a. Install
+
+```bash
+cd services/frontend
+npm install
+```
+
+**Output:** `added N packages …` (react, zustand, d3-force + the Vite/Vitest/RTL dev stack).
+
+### 12b. Run the frontend tests (no browser, no agent, no DB)
+
+```bash
+cd services/frontend
+npm test                 # vitest run   (one-shot; `npm run test:watch` for watch mode)
+npm run typecheck        # tsc --noEmit  (optional; strict TypeScript, no errors)
+```
+
+**Output:**
+
+```
+ Test Files  11 passed (11)
+      Tests  26 passed (26)
+   Duration  ~1.7s
+```
+
+The 26 specs run under **jsdom with `fetch`/SSE mocked** — no browser, no network, no agent, and
+therefore **no database I/O**: the suite **cannot write, delete, or drop** any data (plans/05 §8).
+They cover SSE frame parsing (incl. a frame split across chunks and CRLF endings), the store
+reducer, the scrollable example chips (above the input), `ChatInput`, the probability bars, the
+subgraph (input edges + the synthesized focus/prediction edge that renders even when it is not an
+input edge), IG-popup gating (only the focus pair `u`/`v` are clickable), the class-color/theme
+tokens (electric-purple accent `#a855f7`), a stubbed end-to-end stream → render → click-node flow,
+the counterfactual baseline-vs-counterfactual view, error/malformed-frame resilience, and a
+**graceful error bubble when the agent is unreachable** (the dev-proxy `ECONNREFUSED` case).
+
+### 12c. Run the website locally (dev)
+
+Start the agent first (§11e — needs Ollama, host or docker), then the Vite dev server:
+
+```bash
+# terminal 1 — the agent SSE server on :8100 (see §11e)
+services/agent/.venv/bin/python -m agent
+
+# terminal 2 — the frontend dev server on :5173 (proxies /agent → :8100)
+cd services/frontend
+npm run dev
+```
+
+**Output:** `VITE v5 … Local: http://localhost:5173/`. Open it: click an example chip (the
+scrollable strip above the input) or type a question and press **Send** → the right panel streams
+the tool steps (`▸ get_latest_time_step → 2026-07`, `▸ best_pair_in_group(…)`) then the answer +
+probability chart; the left panel draws the GNNExplainer subgraph with the highlighted
+prediction edge; clicking a highlighted (focus-pair) country node opens its Integrated-Gradients
+popup. The theme is **electric purple**; the example chips scroll left/right above the input.
+
+To point the UI at an agent on another host, set `VITE_AGENT_TARGET` before `npm run dev`
+(e.g. `VITE_AGENT_TARGET=http://192.168.1.10:8100 npm run dev`).
+
+### 12d. Production build (optional)
+
+```bash
+cd services/frontend
+npm run build            # → dist/  (static bundle)
+npm run preview          # serve dist/ locally to sanity-check
+```
+
+A deployed static `dist/` served from a different origin than the agent would need CORS on the
+agent (one-line `app.add_middleware(CORSMiddleware, …)` in `services/agent/agent/server.py`,
+plans/05 §10) — not needed for the Vite-proxied dev flow above.

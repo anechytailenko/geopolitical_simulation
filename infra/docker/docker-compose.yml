@@ -40,6 +40,38 @@ services:
       retries: 20
       start_period: 30s
 
+  # Local LLM for the ReAct agent (plans/04 §10). Opt-in: it is NOT started by a plain
+  # `docker compose up` (which only brings up the two Neo4j DBs); start it explicitly with
+  #   docker compose --profile llm up -d ollama
+  # then one-time:  docker exec geopolitic-ollama ollama pull qwen2.5:3b-instruct
+  # The agent reaches it at the mapped host port via OLLAMA_BASE_URL=http://localhost:11434
+  # (the default), so host-Ollama and this container are interchangeable with no code change.
+  # macOS note: Docker Desktop containers get no Metal/GPU, so this runs CPU-only on a Mac;
+  # host Ollama (Metal) is the faster path there. On Linux+NVIDIA, uncomment the `deploy` block
+  # below (needs nvidia-container-toolkit) for GPU acceleration.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: geopolitic-ollama
+    profiles: ["llm"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: ["gpu"]
+
 volumes:
   neo4j_raw_data:
   neo4j_aggregated_data:
+  ollama_models:

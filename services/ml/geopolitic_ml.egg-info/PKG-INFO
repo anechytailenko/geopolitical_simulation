@@ -12,6 +12,7 @@ Requires-Dist: scikit-learn>=1.3
 Requires-Dist: torchmetrics>=1.3
 Requires-Dist: captum>=0.7
 Requires-Dist: joblib>=1.3
+Requires-Dist: tqdm>=4.66
 Requires-Dist: wandb>=0.16
 Requires-Dist: neo4j>=5.0
 Requires-Dist: fastapi>=0.110
