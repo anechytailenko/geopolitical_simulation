@@ -1,3 +1,4 @@
+import { formatAttribution } from "../lib/format";
 import type { FeatureAttribution } from "../types";
 
 // Integrated-Gradients popup for a focus-pair node (plans/05 §4). Signed bars, top-N by |attr|.
@@ -26,18 +27,22 @@ export function IgPopup({
         const pos = a.attribution >= 0;
         return (
           <div className="ig-row" data-testid={`ig-row-${a.feature}`} key={a.feature}>
-            <span>{a.feature}</span>
-            <span style={{ color: pos ? "var(--pos)" : "var(--neg)" }}>
+            <span className="ig-feature">{a.feature}</span>
+            <span
+              className="ig-value"
+              data-testid={`ig-value-${a.feature}`}
+              style={{ color: pos ? "var(--pos)" : "var(--neg)", whiteSpace: "nowrap" }}
+            >
               <span
                 className="ig-bar"
                 style={{
                   display: "inline-block",
-                  width: `${Math.round((Math.abs(a.attribution) / max) * 56) + 4}px`,
+                  width: `${Math.round((Math.abs(a.attribution) / max) * 44) + 3}px`,
                   background: pos ? "var(--pos)" : "var(--neg)",
+                  verticalAlign: "middle",
                 }}
               />{" "}
-              {pos ? "+" : ""}
-              {a.attribution.toFixed(2)}
+              {formatAttribution(a.attribution)}
             </span>
           </div>
         );

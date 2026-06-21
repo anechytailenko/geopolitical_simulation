@@ -200,6 +200,13 @@ a {
   margin: 3px 0;
   font-size: 12px;
 }
+.ig-feature {
+  min-width: 0;
+  overflow-wrap: anywhere; /* long feature names wrap instead of pushing the value off-screen */
+}
+.ig-value {
+  font-variant-numeric: tabular-nums;
+}
 .ig-bar {
   height: 6px;
   border-radius: 3px;

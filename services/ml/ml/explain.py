@@ -3,10 +3,13 @@
 Two complementary methods, implemented to work with this model's custom temporal forward
 signature (a window = list[HeteroData]) rather than the standard (x, edge_index) signature:
 
-- `integrated_gradients` — feature-level. Integrates the gradient of the predicted-class
-  probability from a zero baseline to the real input, for (a) the (u,v) edge feature vector
-  and (b) u's and v's node features in the last window month. Satisfies the completeness
-  axiom (sum of attributions ≈ F(x) − F(baseline)); `completeness_gap` reports the residual.
+- `integrated_gradients` — feature-level. Integrates the gradient of the **target-class logit**
+  (not the softmax probability) from a zero baseline to the real input, for (a) the (u,v) edge
+  feature vector and (b) u's and v's node features in the last window month. We attribute the
+  logit because a confident model pins the probability at ~1.0, so the probability's gradient —
+  and hence IG of the probability — collapses to ~0; the logit does not saturate, giving
+  meaningful, well-scaled attributions. Satisfies the completeness axiom (sum of attributions ≈
+  F(x) − F(baseline), with F = the target logit); `completeness_gap` reports the residual.
 - `gnn_explainer_edge_mask` — structure-level. Learns a soft mask over the last month's
   SNAPSHOT edges (GNNExplainer-style) that preserves the predicted class with a sparsity
   penalty; returns per-edge importances in [0,1].
@@ -67,7 +70,11 @@ def integrated_gradients(model, window: list, u: int, v: int, pair_attr: torch.T
         w = _clone_window(window)
         x = (base_x + alpha * (last_x - base_x)).detach().requires_grad_(True)
         w[-1][C].x = x
-        p = F.softmax(model(w, pair, a), dim=-1)[0, target_class]
+        # Attribute the target-class LOGIT, not the softmax probability. A confident model pins
+        # the probability at ~1.0, so its gradient w.r.t. inputs is ~0 and IG of the probability
+        # collapses to ~0 (uninformative). The logit does not saturate, giving meaningful,
+        # well-scaled per-feature attributions. Completeness then holds w.r.t. the logit delta.
+        p = model(w, pair, a)[0, target_class]
         ga, gx = torch.autograd.grad(p, [a, x], retain_graph=False)
         grad_attr += ga.detach()
         grad_x += gx.detach()
@@ -76,10 +83,10 @@ def integrated_gradients(model, window: list, u: int, v: int, pair_attr: torch.T
     ig_x = (last_x - base_x) * grad_x / steps
 
     with torch.no_grad():
-        f_x = float(F.softmax(model(window, pair, pair_attr), dim=-1)[0, target_class])
+        f_x = float(model(window, pair, pair_attr)[0, target_class])
         w0 = _clone_window(window)
         w0[-1][C].x = base_x
-        f_base = float(F.softmax(model(w0, pair, base_attr), dim=-1)[0, target_class])
+        f_base = float(model(w0, pair, base_attr)[0, target_class])
     # Completeness is over ALL perturbed inputs: the (u,v) edge vector + EVERY last-month
     # node feature interpolated from the zero baseline (not just u/v, which are reported only
     # for interpretability). Summing just u/v would leave a large spurious residual.

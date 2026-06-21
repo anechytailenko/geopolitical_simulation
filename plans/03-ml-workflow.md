@@ -381,14 +381,17 @@ node_mask_type='attributes', edge_mask_type='object',
 model_config=ModelConfig(mode='multiclass_classification', task_level='edge',
 return_type='probs'))`, producing a `HeteroExplanation`.
 
-**Integrated Gradients — feature-level.** Attributes the predicted class probability to each
+**Integrated Gradients — feature-level.** Attributes the **target-class logit** `F` to each
 input feature by integrating the gradient along a straight path from a baseline (zero/mean
 features) to the actual input:
 `IG_i = (x_i − x'_i) · ∫₀¹ ∂F(x' + α(x−x'))/∂x_i dα`, approximated by a Riemann sum over
-~50 steps. It satisfies the **completeness axiom** (attributions sum to `F(x) − F(x')`),
-which is a built-in correctness check (§6). Output: a signed importance score per feature
-per node (e.g. "military expenditure of `u`", "conflict count at `T−3`"), positive = pushed
-toward the predicted class. In PyG: `CaptumExplainer('IntegratedGradients')`.
+~50 steps. **Attribute the logit, not the softmax probability:** a confident model pins the
+probability at ~1.0, so its gradient — and hence IG of the probability — collapses to ~0
+(uninformative); the logit does not saturate and yields meaningful, well-scaled attributions.
+It satisfies the **completeness axiom** (attributions sum to `F(x) − F(x')`, with `F` = the
+target logit), which is a built-in correctness check (§6). Output: a signed importance score
+per feature per node (e.g. "military expenditure of `u`", "conflict count at `T−3`"),
+positive = pushed toward the predicted class. In PyG: `CaptumExplainer('IntegratedGradients')`.
 
 **Surfacing.** Both ride along the `POST /predict` response and render in the frontend's
 Explanation Panel as (1) a subgraph highlight (node/edge opacity ∝ GNNExplainer mask) and
