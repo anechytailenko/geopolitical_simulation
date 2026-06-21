@@ -23,3 +23,5 @@ __pycache__/
 # Neo4j dumps
 *.dump
 *.dump.gz
+
+*.DS_Store
