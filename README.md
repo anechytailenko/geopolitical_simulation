@@ -20,7 +20,7 @@ A geopolitical simulation powered by a Spatio-Temporal Graph Neural Network (GNN
 
 ![](demos/demo_aggregated.gif)
 
-# Workflow
+# ML Workflow
 
 ## Training
 
